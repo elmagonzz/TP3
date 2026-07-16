@@ -1,0 +1,25 @@
+# TP3 - Análisis de Sentimiento sobre Tweets (Sentiment140)
+# Requerimientos de Python. Testeado con Python 3.12.
+#
+# Instalación:
+#   pip install -r requirements.txt
+#
+# Nota: bertopic instala transitivamente sentence-transformers y torch
+# (no se usan directamente en el código, pero son dependencia de la librería).
+
+pandas==3.0.2
+numpy==2.4.4
+scikit-learn==1.8.0
+scipy==1.17.1
+matplotlib==3.10.8
+seaborn==0.13.2
+
+nltk==3.10.0
+gensim==4.4.0
+wordcloud==1.9.6
+textblob==0.20.0
+
+umap-learn==0.5.12
+bertopic==0.17.4
+hdbscan==0.8.44
+networkx==3.6.1
