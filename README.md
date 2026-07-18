@@ -1,214 +1,145 @@
-# TP3 — Análisis de Sentimiento sobre Tweets (Sentiment140)
+## TP3 — Análisis de Sentimiento sobre Tweets (Sentiment140)
 
 
 
-
-
-##### Diplomatura en Inteligencia Artificial - UP
-
-##### Alumno: Gonzalez Marta Elizabeth
-
-##### Mes: Julio26
-
-##### Trabajo Práctico 3
-
-
-
-
-
-Análisis de sentimiento sobre tweets en inglés (dataset **Sentiment140**), combinando modelos clásicos de ML, un modelo pre-entrenado, modelado de tópicos con BERTopic, embeddings de palabras, análisis de grafos, métricas de asociación (coseno y PMI) y visualizaciones (wordclouds, UMAP, dendrogramas, redes).
+1. **Split de 3 partes** (train/validación/test, 70/15/15) en vez de solo train/test.
+2. Cada modelo se evalúa con `classification\\\_report` **en train Y en validación** (no solo test), para poder detectar overfitting.
+3. **Notebook dedicado a validación y selección del mejor modelo**: se comparan los candidatos en validación, se elige el mejor, y **recién ahí** se hace la única evaluación final sobre test (que hasta ese momento no fue tocado).
+4. **Notebook dedicado a predicciones**: uso del modelo ya elegido para predecir sobre test y sobre texto nuevo.
 
 \---
 
 
 
-## 1\. Estructura del proyecto
+
+
+## Estructura del proyecto
 
 ```
 .
 ├── README.md
 ├── requirements.txt
-├── data/raw/
-│   ├── testdata\_manual\_2009\_06\_14.csv       		# test manual oficial de Sentiment140 (3 clases)
-│   ├── training.1600000.processed.noemoticon.csv     	# dataset original completo 1.6M registros de Tweets Sentiment140
+├── ../data/raw/
+│   ├── testdata\\\_manual\\\_2009\\\_06\\\_14.csv
 
-├── data/processed/
-│   ├── train\_clean.csv                      		# train limpio + features derivadas (generado por notebook 1)
-│   ├── test\_clean.csv                       		# test limpio, subconjunto binario (generado por notebook 1)
-│   ├── test\_full\_with\_neutral.csv           		# test completo con clase neutral (generado por notebook 1)
-│   ├── tfidf\_vectorizer.pkl                 		# vectorizador TF-IDF ya ajustado (generado por notebook 2)
-│   ├── lr\_model.pkl                         		# modelo de Regresión Logística ya entrenado (generado por notebook 2)
-│   └── resultados\_modelos.csv               		# tabla comparativa de accuracy/F1 (generado por notebook 2)
+│   ├──training.1600000.processed.noemoticon  # dataset 1.6M
+
+├── ../data/processed/ 
+
+│   ├── mega\\\_clean.csv                    # (ref) Notebook 1 -> une datasets + limpia + feature engineering
+│   ├── split\\\_train.csv / split\\\_val.csv / split\\\_test.csv   # (ref) Notebook 2 -> split 70/15/15
+│   ├── tfidf\\\_vectorizer\\\_mega.pkl, scaler\\\_features.pkl      # (ref) Notebook 2
+│   ├── nb\\\_model.pkl, lr\\\_model\\\_mega.pkl, lr\\\_fe\\\_model.pkl    # (ref) Notebook 2 -> 3 modelos candidatos
+│   ├── modelo\\\_final\\\_elegido.pkl          # (ref) Notebook 3 -> el modelo elegido tras validación
+│   ├── comparacion\\\_validacion.csv, tabla\\\_generalizacion\\\_final.csv, comparacion\\\_final\\\_vs\\\_textblob.csv  # (ref) Notebook 3
+│   └── predicciones\\\_test.csv             # (ref) Notebook 4
 └── notebooks/
-    ├── 01\_EDA\_preprocesamiento.ipynb
-    ├── 02\_modelado\_sentimiento.ipynb
-    └── 03\_topicos\_embeddings\_visualizaciones.ipynb
+
+\&#x20;   ├── 00\\\_primera\\\_lectura\\\_eda.ipynb
+    ├── 01\\\_union\\\_eda\\\_preprocesamiento.ipynb
+    ├── 02\\\_modelado\\\_sentimiento.ipynb
+    ├── 03\\\_validacion\\\_seleccion\\\_modelo.ipynb
+    ├── 04\\\_predicciones.ipynb
+    └── 05\\\_topicos\\\_embeddings\\\_grafos.ipynb
 ```
 
-Los notebooks están pensados para correrse **en orden** (1 → 2 → 3): cada uno lee archivos generados por el anterior. 
-
-El notebook 1 ya genera todos los CSV intermedios, así que si solo se quiere revisar el modelado o los tópicos, alcanza con tener la carpeta `data/` tal como está en este entregable (ya incluye los archivos intermedios generados).
+Correr en orden 0 -> 1 → 2 → 3 → 4 → 5.
 
 \---
 
+
+
 ## 
 
-## 2\. Instalación
-
-
+### Instalación
 
 ```bash
 python -m venv venv
-source venv/bin/activate        # Windows: venv\\Scripts\\activate
+source venv/bin/activate        # Windows: venv\\\\Scripts\\\\activate
 pip install -r requirements.txt
 ```
 
+Descargas automáticas la primera vez: NLTK (`stopwords`, `wordnet`, `omw-1.4`, `opinion\\\_lexicon`) en el notebook 1, y GloVe-Twitter-25 (\~105 MB) en el notebook 5.
+
 ### 
-
-### Descargas adicionales la primera vez que se ejecutan los notebooks
-
-
-
-* **NLTK**: el notebook 1 descarga automáticamente `stopwords`, `wordnet` y `omw-1.4` la primera vez (`nltk.download(...)`, ya incluido en el código, no requiere paso manual).
-* **GloVe-Twitter (25 dim)**: el notebook 3 descarga automáticamente (vía `gensim.downloader`) un modelo de embeddings pre-entrenado en 2 mil millones de tweets (\~105 MB, se cachea localmente tras la primera descarga en `\~/gensim-data/`). Requiere conexión a internet la primera vez que se corre ese notebook.
 
 \---
 
-## 
-
-## 3\. Datasets utilizados
-
-|Archivo|Filas|Clases|Rol|
-|-|-|-|-|
-|`training.1600000.processed.noemoticon.csv`|1600000|0 (negativo) / 4 (positivo)|**Entrenamiento** — dataset original de 1.6M tweets|
-|`testdata\_manual\_2009\_06\_14.csv`|498|0 / 2 (neutral) / 4|**Test externo** — set manualmente etiquetado por Stanford, con tópicos reales de Twitter 2009|
-
-
-
-\---
-
-## 
-
-## 4\. Qué hace cada notebook
+### Qué hace cada notebook
 
 ### 
 
-### &#x09;01\_EDA\_preprocesamiento.ipynb
+### 00\_primera\_lectura\_eda.ipynb
 
 
 
-* Carga y comparación de los 3 datasets (nulos, duplicados, tipos).
-* Distribución de clases, longitud de tweets (caracteres/palabras).
-* **Análisis temporal**: parseo de la columna `date`, patrones de volumen y sentimiento por hora del día y día de la semana.
-* **Relación entre atributos**: matriz de correlación entre longitud, momento temporal y sentimiento.
-* Tópicos del test manual (columna `flag`).
-* Limpieza de texto: decodificación de entidades HTML, eliminación de URLs/menciones, tratamiento de hashtags, remoción de stopwords conservando negaciones, lematización.
-* WordClouds y top palabras por clase.
-* Guarda los datasets limpios (`train\_clean.csv`, `test\_clean.csv`, `test\_full\_with\_neutral.csv`) para los notebooks siguientes.
-
-### 
-
-### &#x09;02\_modelado\_sentimiento.ipynb
+Primer mirada cruda a ambos dataset para identificar nulos, duplicados, outliers, y primeras relaciones entre variables. No genera ningún archivo.
 
 
 
-* Vectorización TF-IDF (uni + bigramas).
-* Entrena **2 modelos clásicos**: Naive Bayes Multinomial y Regresión Logística.
-* Evalúa ambos, más **TextBlob** (modelo pre-entrenado), sobre el mismo test externo.
-* Analiza por separado el subconjunto de test **neutral** (clase no vista en entrenamiento), mostrando que los modelos están más inseguros ahí (señal razonable de comprensión parcial de la ambigüedad).
-* Usa **similitud coseno** para interpretar tweets mal clasificados (busca sus vecinos más parecidos en el train).
-* Guarda el vectorizador y el mejor modelo entrenado (`tfidf\_vectorizer.pkl`, `lr\_model.pkl`) y la tabla comparativa (`resultados\_modelos.csv`).
+### 01\_union\_eda\_preprocesamiento.ipynb
 
 
 
-**Resultado principal:** Regresión Logística (\~77.7% accuracy) > Naive Bayes (\~76.6%) > TextBlob pre-entrenado (\~74.4%) sobre el test externo.
+Une 1.6M + test manual (con la clase neutral incluida, documentando su desbalance), EDA (temporalidad, correlación de atributos), limpieza de texto, y **Feature Engineering** (14 features: puntuación, mayúsculas, elongaciones, emoticones, menciones/hashtags, score de polaridad léxica). Guarda `../data/processed/mega\\\_clean.csv`.
 
 ### 
 
-### &#x09;03\_topicos\_embeddings\_visualizaciones.ipynb
+### 02\_modelado\_sentimiento.ipynb
 
 
 
-* Keywords por clase (TF-IDF diferencial).
-* **BERTopic** para modelado de tópicos no supervisado, con **dendrograma jerárquico** (scipy, sobre la matriz c-TF-IDF). *Nota metodológica: se usa un Word2Vec propio como backend de embeddings en vez del sentence-transformer por defecto de BERTopic, porque este entorno no tiene acceso a Hugging Face Hub — documentado en detalle dentro del notebook.*
-* **Juego de analogías** con embeddings: Word2Vec propio (corpus chico, resultados limitados) vs. GloVe pre-entrenado en 2B tweets (resultados coherentes). Incluye función de menú reutilizable para probar analogías propias.
-* **PMI** (Pointwise Mutual Information) para encontrar bigramas característicos por clase.
-* **Análisis de grafos**: red de co-ocurrencia de palabras (aristas ponderadas por PMI), con centralidad de grado y detección de comunidades, por separado para tweets positivos y negativos.
-* **UMAP**: proyección 2D de los embeddings de tweets, coloreada por sentimiento real.
+* **Split de 3 partes** (train/validación/test, 70/15/15 estratificado) — guarda los 3 splits para reutilizarlos en los notebooks siguientes sin volver a splitear.
+* Entrena 3 modelos candidatos: Naive Bayes, Regresión Logística (solo TF-IDF), Regresión Logística + Feature Engineering.
+* **Cada modelo se evalúa con `classification\\\_report` en TRAIN y en VALIDACIÓN** — se compara el F1 de ambos para detectar overfitting (gap grande = mal síntoma).
+* El **test no se toca en este notebook** — queda reservado para el Notebook 3.
+* Guarda los 3 modelos entrenados + vectorizador + scaler.
 
-\---
+### 
 
-## 
-
-## 5\. Limitaciones documentadas
+### 03\_validacion\_seleccion\_modelo.ipynb
 
 
 
-* El train es **binario** (negativo/positivo); el test externo tiene una tercera clase (neutral) que ningún modelo entrenado puede predecir por diseño. Se aborda explícitamente en el notebook 2 en vez de ignorarse.
-* BERTopic no usa un transformer de Hugging Face (bloqueado por red en este entorno) sino embeddings promedio de un Word2Vec propio — esto reduce la granularidad de los tópicos encontrados respecto a lo que se obtendría con un modelo pre-entrenado.
-* El análisis temporal está aclarado en el notebook 1.
+* Compara los 3 candidatos **en validación** (F1 macro, F1 neutral).
+* **Elige el mejor modelo** según ese criterio — no según el test, para no sesgar la elección.
+* Hace la evaluación final — **una única vez** — sobre test, para el modelo elegido.
+* Compara el modelo elegido contra TextBlob (pre-entrenado) sobre ese mismo test — la comparación "modelo entrenado vs. pre-entrenado" de la consigna original.
+* Similitud coseno para interpretar errores del modelo final.
+* Guarda el modelo elegido (`../data/processed/modelo\_final\_elegido.pkl`).
+
+
+
+### 04\_predicciones.ipynb
+
+
+
+* Carga el modelo ya elegido y validado.
+* Genera predicciones detalladas sobre test (texto + etiqueta real + predicha), con ejemplos de aciertos y errores.
+* Función reutilizable `predecir\\\_sentimiento(texto)` para clasificar texto nuevo (aplicando la misma limpieza del Notebook 1).
+* Exporta `../data/processed/predicciones/\_test.csv`.
+
+### 
+
+### 05\_topicos\_embeddings\_grafos.ipynb
+
+
+
+BERTopic a escala (muestra + `transform()`), Word2Vec propio vs. GloVe pre-entrenado, PMI, y los grafos de usuarios (menciones + hashtags) con su evolución temporal semana a semana.
+
+
+
+
 
 \---
 
 
 
-## 6\. Conclusión General
+### Decisiones y limitaciones clave (resumen)
 
 
 
-
-
-El análisis confirma que el sentimiento en tweets es aprendible a partir del contenido textual con relativamente poco dato (5000 tweets alcanzaron para superar a un modelo pre-entrenado genérico), pero también deja claro que hay un techo de complejidad (ironía, ambigüedad, jerga específica) que un enfoque bag-of-words simple no resuelve del todo.
-
-
-
-###### Hallazgos principales por notebook
-
-
-
-###### 1\. EDA y preprocesamiento
-
-
-
-El dataset original de 1.6M está ordenado por clase.
-
-Ni la longitud del tweet, ni la hora del día, ni el día de la semana correlacionan de forma relevante con el sentimiento (matriz de correlación con valores cercanos a 0) — el sentimiento no tiene atajos estructurales, depende del contenido.
-
-Bug real encontrado y corregido: entidades HTML sin decodificar (\&lt;3) contaminaban el vocabulario con fragmentos basura (lt, gt).
-
-
-
-###### 2\. Modelado de sentimiento
-
-
-
-Regresión Logística (\~77.7% accuracy) > Naive Bayes (\~76.6%) > TextBlob pre-entrenado (\~74.4%) sobre el test externo — un modelo chico pero ajustado al dominio (tweets) generaliza mejor que un lexicón genérico.
-
-Los modelos, entrenados en binario, quedan "más inseguros" (probabilidades más cercanas a 0.5) frente a los tweets que un humano etiquetó como neutrales — evidencia indirecta de que sí captan algo de la ambigüedad real, aunque no puedan nombrarla.
-
-La similitud coseno mostró que buena parte de los errores se explican por vocabulario poco representado en el train (nombres propios, jerga 2009) o por sentimiento dependiente de contexto/ironía que TF-IDF no captura.
-
-
-
-###### 3\. Tópicos, embeddings, grafos y visualizaciones
-
-
-
-BERTopic encontró un tópico dominante genérico + 2-3 tópicos minoritarios interpretables (ceremonias/eventos, miedo/aburrimiento, quejas cotidianas) — la granularidad quedó limitada por usar embeddings propios (Word2Vec) en vez de un transformer, decisión forzada por falta de acceso a Hugging Face en el entorno.
-
-El tamaño del corpus de embeddings importa mucho más que el algoritmo: el Word2Vec propio (5000 tweets) dio analogías poco coherentes, mientras que GloVe pre-entrenado en 2B tweets resolvió analogías razonablemente bien (good-bad+terrible→horrible, king-man+woman funcionando).
-
-PMI y el grafo de co-ocurrencia (con detección de comunidades) llegaron, por caminos distintos, a patrones temáticos parecidos a los de BERTopic — dos técnicas independientes convergiendo es una buena señal de robustez.
-
-UMAP mostró que positivos y negativos se mezclan bastante en el espacio de embeddings, consistente con el \~77% de accuracy: hay señal real, pero no separación perfecta — esperable en texto corto e informal.
-
-
-
-###### 4\. Limitaciones encontradas
-
-
-
-Clase neutral no vista, embeddings propios más débiles que un pretrained, ambigüedad/ironía no resuelta, no son fallas del análisis y quedaron documentadas explícitamente en cada notebook.
-
-
+* La clase neutral queda en fuerte desbalance (139 de >1.6M) — documentado explícitamente; los modelos usan balanceo de clases.
+* La separación entrenar (Notebook 2) → validar/elegir (Notebook 3) → predecir (Notebook 4) evita "espiar" el test durante el desarrollo, y hace que la métrica final de test sea una medición honesta de generalización.
+* BERTopic no se ajusta sobre el megaset completo por razones de escala — se usa la estrategia estándar de muestra + transform.
 
