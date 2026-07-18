@@ -1,0 +1,3 @@
+Modelo,F1 macro (test),Accuracy (test)
+Regresión Logística + FE,0.586514468688952,0.8075007324934076
+TextBlob (pre-entrenado),0.32786967347074286,0.39361265748608265
